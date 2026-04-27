@@ -1,15 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 
 import { StatCards } from "@/components/dashboard/stat-cards";
-import { OutreachChart } from "@/components/dashboard/outreach-chart";
 import { CampaignTable } from "@/components/dashboard/campaign-table";
 import {
   ListRowsSkeleton,
   PageHeaderSkeleton,
   StatsRowSkeleton,
 } from "@/components/ui/skeleton-presets";
+
+const OutreachChart = dynamic(
+  () =>
+    import("@/components/dashboard/outreach-chart").then(
+      (m) => m.OutreachChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-muted/40 h-64 animate-pulse rounded-lg" />
+    ),
+  },
+);
 
 interface DashboardData {
   totals: {
