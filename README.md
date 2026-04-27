@@ -115,11 +115,6 @@ Looking for somewhere to start? Filter issues by [`good first issue`](../../labe
 
 <br />
 
-## 📈 Star history
-
-<a href="https://star-history.com/#jay-sahnan/signal&Date">
-  <img src="https://api.star-history.com/svg?repos=jay-sahnan/signal&type=Date" alt="Star history" width="640" />
-</a>
 
 <br /><br />
 
