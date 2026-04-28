@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 // Signal interactive setup. See docs/setup.md for the manual path.
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import {
+  constants as fsConstants,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  copyFileSync,
+} from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output, exit, argv } from "node:process";
 import { execSync, spawnSync } from "node:child_process";
@@ -114,8 +120,12 @@ function preflight() {
 }
 
 function readEnvLocal() {
-  if (!existsSync(ENV_PATH)) return "";
-  return readFileSync(ENV_PATH, "utf8");
+  try {
+    return readFileSync(ENV_PATH, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return "";
+    throw err;
+  }
 }
 
 function writeEnvLocal(content) {
@@ -132,13 +142,16 @@ function setEnvKey(content, key, value) {
 
 async function bootstrapEnv() {
   log.header("Env file");
-  if (RESET && existsSync(ENV_PATH)) {
-    log.warn(".env.local exists — --reset was passed, overwriting.");
+  if (RESET) {
     copyFileSync(ENV_EXAMPLE, ENV_PATH);
-  } else if (!existsSync(ENV_PATH)) {
-    copyFileSync(ENV_EXAMPLE, ENV_PATH);
+    log.warn(".env.local reset — overwritten from .env.example.");
+    return;
+  }
+  try {
+    copyFileSync(ENV_EXAMPLE, ENV_PATH, fsConstants.COPYFILE_EXCL);
     log.ok(".env.local created from .env.example");
-  } else {
+  } catch (err) {
+    if (err.code !== "EEXIST") throw err;
     log.ok(".env.local already exists — will update in place.");
   }
 }
@@ -280,8 +293,13 @@ async function promptClerk() {
 
 function enableSupabaseClerkAuth() {
   const path = join(ROOT, "supabase", "config.toml");
-  if (!existsSync(path)) return;
-  const original = readFileSync(path, "utf8");
+  let original;
+  try {
+    original = readFileSync(path, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return;
+    throw err;
+  }
   // Match the [auth.third_party.clerk] block's `enabled = false` line and
   // flip it. Anchored to the block heading so we don't rewrite other
   // disabled providers (firebase, auth0, aws_cognito).
