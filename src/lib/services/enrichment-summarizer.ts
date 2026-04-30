@@ -1,9 +1,10 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -12,8 +13,6 @@ import {
   wrapUntrusted,
 } from "@/lib/prompt-safety";
 
-const MODEL_ID = "claude-haiku-4-5-20251001";
-const MODEL_LABEL = "haiku";
 
 interface SearchResultLike {
   title: string;
@@ -41,7 +40,7 @@ export async function summarizeWebsite(input: {
 
   try {
     const { object, usage } = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: getModel("fast"),
       schema: z.object({
         summary: z
           .string()
@@ -59,13 +58,14 @@ Raw scraped website text:
 ${wrapUntrusted(bodyText)}`,
     });
 
+    const { provider: wsProvider, modelId: wsModelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(wsProvider),
       operation: "summarize-website",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage(MODEL_LABEL, usage),
-      metadata: { model: MODEL_LABEL, companyName: input.companyName },
+      estimated_cost_usd: estimateCostFromUsage(wsProvider, wsModelId, usage),
+      metadata: { model: wsModelId, companyName: input.companyName },
     });
 
     return object.summary.trim() || null;
@@ -95,7 +95,7 @@ export async function summarizeSearchResults<T extends SearchResultLike>(
 
   try {
     const { object, usage } = await generateObject({
-      model: anthropic(MODEL_ID),
+      model: getModel("fast"),
       schema: z.object({
         summaries: z.array(
           z.object({
@@ -117,14 +117,15 @@ Scraped search results:
 ${wrapUntrusted(payload)}`,
     });
 
+    const { provider: srProvider, modelId: srModelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(srProvider),
       operation: "summarize-search-results",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage(MODEL_LABEL, usage),
+      estimated_cost_usd: estimateCostFromUsage(srProvider, srModelId, usage),
       metadata: {
-        model: MODEL_LABEL,
+        model: srModelId,
         companyName,
         category,
         count: results.length,

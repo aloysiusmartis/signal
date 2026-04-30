@@ -1,9 +1,10 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { WebExtractionService } from "@/lib/services/web-extraction-service";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -159,7 +160,7 @@ export async function findPeopleOnDomain(
 
   try {
     const { object, usage } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getModel("fast"),
       schema: z.object({
         people: z.array(
           z.object({
@@ -199,14 +200,15 @@ Scraped page content:
 ${wrapUntrusted(combinedContent.slice(0, 12000))}`,
     });
 
+    const { provider: extractProvider, modelId: extractModelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(extractProvider),
       operation: "domain-people-extract",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
+      estimated_cost_usd: estimateCostFromUsage(extractProvider, extractModelId, usage),
       metadata: {
-        model: "claude-haiku-4-5",
+        model: extractModelId,
         domain,
         pagesScraped: scrapedContent.length,
         peopleFound: object.people.length,
@@ -289,7 +291,7 @@ export async function filterContactsByCompany(
 
   try {
     const { object, usage } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getModel("fast"),
       schema: z.object({
         verified: z.array(
           z.object({
@@ -327,14 +329,15 @@ Rules:
 - Clean up titles: extract just the role (e.g., "Branch Manager" not "Branch Manager at Dixons")`,
     });
 
+    const { provider: filterProvider, modelId: filterModelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(filterProvider),
       operation: "contact-filter",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
+      estimated_cost_usd: estimateCostFromUsage(filterProvider, filterModelId, usage),
       metadata: {
-        model: "claude-haiku-4-5",
+        model: filterModelId,
         companyName: company.name,
         candidateCount: preFiltered.length,
         verifiedCount: object.verified.length,

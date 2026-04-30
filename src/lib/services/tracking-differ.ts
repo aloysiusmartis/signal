@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -127,7 +128,7 @@ export async function classifyNewRoles(
   if (jobs.length === 0) return [];
 
   const { object, usage } = await generateObject({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: getModel("fast"),
     schema: z.object({
       classifications: z.array(
         z.object({
@@ -156,13 +157,14 @@ ${wrapUntrusted(
 Assign each title exactly one category from: engineering, sales, marketing, operations, leadership, product, design, support, finance, hr, other.`,
   });
 
+  const { provider, modelId } = getModelInfo("fast");
   trackUsage({
-    service: "claude",
+    service: providerToServiceName(provider),
     operation: "classify-roles",
     tokens_input: usage.inputTokens ?? 0,
     tokens_output: usage.outputTokens ?? 0,
-    estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
-    metadata: { jobCount: jobs.length },
+    estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
+    metadata: { model: modelId, jobCount: jobs.length },
   });
 
   return object.classifications;

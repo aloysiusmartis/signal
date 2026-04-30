@@ -1,5 +1,6 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+
+import { getModel } from "@/lib/ai/gateway";
 import {
   ComposedEmailSchema,
   buildComposeUserPrompt,
@@ -36,7 +37,7 @@ export async function composeEmail(
   try {
     const { skills, ...userPromptInput } = input;
     const { object } = await generateObject({
-      model: anthropic("claude-opus-4-6"),
+      model: getModel("power"),
       schema: ComposedEmailSchema,
       system: buildEmailSystemPrompt(skills ?? []),
       prompt: buildComposeUserPrompt(userPromptInput),

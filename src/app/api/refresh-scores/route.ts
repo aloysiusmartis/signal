@@ -1,10 +1,11 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import { getProfileForPrompt } from "@/lib/profile";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
   withAction,
 } from "@/lib/services/cost-tracker";
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
       : "No user profile available.";
 
     const result = await generateObject({
-      model: anthropic("claude-sonnet-4-20250514"),
+      model: getModel("standard"),
       schema: z.object({
         scores: z.array(
           z.object({
@@ -183,14 +184,15 @@ Contacts to score (enrichment data scraped from LinkedIn, Twitter, news):
 ${wrapUntrusted(JSON.stringify(contactSummaries, null, 2))}`,
     });
 
+    const { provider: scoreProvider, modelId: scoreModelId } = getModelInfo("standard");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(scoreProvider),
       operation: "score-contacts",
       tokens_input: result.usage.inputTokens ?? 0,
       tokens_output: result.usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage("sonnet", result.usage),
+      estimated_cost_usd: estimateCostFromUsage(scoreProvider, scoreModelId, result.usage),
       metadata: {
-        model: "claude-sonnet-4",
+        model: scoreModelId,
         contactsScored: result.object.scores.length,
         cache_creation_tokens: result.usage.inputTokenDetails?.cacheWriteTokens,
         cache_read_tokens: result.usage.inputTokenDetails?.cacheReadTokens,

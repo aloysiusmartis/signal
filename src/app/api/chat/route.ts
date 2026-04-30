@@ -1,4 +1,5 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
+import { estimateCostFromUsage, providerToServiceName } from "@/lib/services/cost-tracker";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -11,10 +12,7 @@ import {
 
 import { getProfileForPrompt } from "@/lib/profile";
 import { getActiveSignals } from "@/lib/signals";
-import {
-  estimateClaudeCostFromUsage,
-  trackUsage,
-} from "@/lib/services/cost-tracker";
+import { trackUsage } from "@/lib/services/cost-tracker";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { buildSystemPrompt } from "@/lib/system-prompt";
 import { allTools } from "@/lib/tools";
@@ -118,7 +116,7 @@ export async function POST(request: Request) {
   const stream = createUIMessageStream({
     execute: ({ writer }) => {
       const result = streamText({
-        model: anthropic("claude-sonnet-4-6"),
+        model: getModel("standard"),
         system: systemPrompt,
         messages: modelMessages,
         tools: allTools,
@@ -137,14 +135,15 @@ export async function POST(request: Request) {
           campaignId: campaignId ?? null,
         },
         onFinish({ usage }) {
+          const { provider, modelId } = getModelInfo("standard");
           trackUsage({
-            service: "claude",
+            service: providerToServiceName(provider),
             operation: "chat",
             tokens_input: usage.inputTokens ?? 0,
             tokens_output: usage.outputTokens ?? 0,
-            estimated_cost_usd: estimateClaudeCostFromUsage("sonnet", usage),
+            estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
             metadata: {
-              model: "claude-sonnet-4-6",
+              model: modelId,
               cache_creation_tokens: usage.inputTokenDetails?.cacheWriteTokens,
               cache_read_tokens: usage.inputTokenDetails?.cacheReadTokens,
             },
@@ -159,7 +158,7 @@ export async function POST(request: Request) {
               campaign_id: campaignId ?? null,
               tokens_input: usage.inputTokens ?? 0,
               tokens_output: usage.outputTokens ?? 0,
-              estimated_cost_usd: estimateClaudeCostFromUsage("sonnet", usage),
+              estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
             },
           });
         },

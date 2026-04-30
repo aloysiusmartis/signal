@@ -1,8 +1,9 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -51,7 +52,7 @@ export async function evaluateIntent(
   }
 
   const { object, usage } = await generateObject({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: getModel("fast"),
     schema: verdictSchema,
     prompt: `You decide whether the observed change on a company warrants flagging them as "ready to contact" for outreach. You have the buyer's tracking intent (their own words) and a summary of what changed since the last snapshot.
 
@@ -75,13 +76,15 @@ Return a JSON object with:
 - confidence: "high" when the match is unambiguous, "medium" when it plausibly matches, "low" when you're unsure.`,
   });
 
+  const { provider, modelId } = getModelInfo("fast");
   trackUsage({
-    service: "claude",
+    service: providerToServiceName(provider),
     operation: "evaluate-intent",
     tokens_input: usage.inputTokens ?? 0,
     tokens_output: usage.outputTokens ?? 0,
-    estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
+    estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
     metadata: {
+      model: modelId,
       signalCategory: input.signalCategory,
       fire: object.fire,
       confidence: object.confidence,

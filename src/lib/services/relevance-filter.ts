@@ -1,8 +1,9 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -51,7 +52,7 @@ export async function filterRelevantResults(
 
   try {
     const { object, usage } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getModel("fast"),
       schema: z.object({
         relevant: z
           .array(z.number().int())
@@ -71,14 +72,15 @@ Results:
 ${wrapUntrusted(summaries.join("\n\n"))}`,
     });
 
+    const { provider, modelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(provider),
       operation: "relevance-filter",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
+      estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
       metadata: {
-        model: "claude-haiku-4-5",
+        model: modelId,
         companyName,
         resultCount: toJudge.length,
       },

@@ -3,8 +3,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 // ── Pricing constants (USD) ──────────────────────────────────────────────
-// Last verified 2026-03-29. Sources:
+// Last verified 2026-04-29. Sources:
 //   Claude  -- https://docs.anthropic.com/en/docs/about-claude/pricing
+//   OpenAI  -- https://openai.com/api/pricing
+//   Google  -- https://ai.google.dev/gemini-api/docs/pricing
 //   Exa     -- https://exa.ai/pricing (March 2026: contents bundled into search)
 //   Apify   -- https://apify.com/pricing (pay-per-result actors)
 //   BB      -- https://browserbase.com/pricing
@@ -19,6 +21,29 @@ export const PRICING = {
   claude_haiku_output: 5.0,
   claude_haiku_cache_read: 0.1,
   claude_haiku_cache_write: 1.25,
+  // Claude Opus 4 (per million tokens)
+  claude_opus_input: 15.0,
+  claude_opus_output: 75.0,
+  claude_opus_cache_read: 1.5,
+  claude_opus_cache_write: 18.75,
+  // OpenAI GPT-4o (per million tokens)
+  openai_gpt4o_input: 2.5,
+  openai_gpt4o_output: 10.0,
+  // OpenAI GPT-4o-mini (per million tokens)
+  openai_gpt4o_mini_input: 0.15,
+  openai_gpt4o_mini_output: 0.6,
+  // OpenAI o3 (per million tokens)
+  openai_o3_input: 10.0,
+  openai_o3_output: 40.0,
+  // Google Gemini 2.5 Pro (per million tokens, ≤200k context)
+  google_gemini25_pro_input: 1.25,
+  google_gemini25_pro_output: 10.0,
+  // Google Gemini 2.5 Flash (per million tokens)
+  google_gemini25_flash_input: 0.15,
+  google_gemini25_flash_output: 0.6,
+  // Google Gemini 2.0 Flash (per million tokens)
+  google_gemini20_flash_input: 0.1,
+  google_gemini20_flash_output: 0.4,
   // Exa -- $7 per 1,000 searches (text + highlights for 10 results included)
   exa_search: 0.007,
   // Apify -- pay-per-result pricing (~20 posts per profile scrape)
@@ -63,11 +88,13 @@ export function withAction<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 export type ServiceName =
   | "claude"
+  | "openai"
   | "exa"
   | "apify"
   | "browserbase"
   | "google"
-  | "agentmail";
+  | "agentmail"
+  | "ollama";
 
 interface UsageEntry {
   service: ServiceName;
@@ -80,7 +107,7 @@ interface UsageEntry {
   user_id?: string;
 }
 
-export type ClaudeModel = "sonnet" | "haiku";
+export type ClaudeModel = "sonnet" | "haiku" | "opus";
 
 export interface ClaudeCostParams {
   model: ClaudeModel;
@@ -101,19 +128,27 @@ export interface ClaudeCostParams {
 export function estimateClaudeCost(params: ClaudeCostParams): number {
   const { model } = params;
   const uncachedRate =
-    model === "sonnet"
+    model === "opus"
+      ? PRICING.claude_opus_input
+      : model === "sonnet"
       ? PRICING.claude_sonnet_input
       : PRICING.claude_haiku_input;
   const cacheReadRate =
-    model === "sonnet"
+    model === "opus"
+      ? PRICING.claude_opus_cache_read
+      : model === "sonnet"
       ? PRICING.claude_sonnet_cache_read
       : PRICING.claude_haiku_cache_read;
   const cacheWriteRate =
-    model === "sonnet"
+    model === "opus"
+      ? PRICING.claude_opus_cache_write
+      : model === "sonnet"
       ? PRICING.claude_sonnet_cache_write
       : PRICING.claude_haiku_cache_write;
   const outputRate =
-    model === "sonnet"
+    model === "opus"
+      ? PRICING.claude_opus_output
+      : model === "sonnet"
       ? PRICING.claude_sonnet_output
       : PRICING.claude_haiku_output;
 
@@ -155,6 +190,70 @@ export function estimateClaudeCostFromUsage(
       usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens,
     cacheCreationTokens: usage.inputTokenDetails?.cacheWriteTokens,
   });
+}
+
+/** Maps a gateway provider id to a ServiceName for the usage log. */
+export function providerToServiceName(provider: string): ServiceName {
+  switch (provider) {
+    case "anthropic": return "claude";
+    case "openai":    return "openai";
+    case "google":    return "google";
+    case "ollama":    return "ollama";
+    default:
+      console.warn(`[cost-tracker] unknown provider "${provider}", logging as "claude"`);
+      return "claude";
+  }
+}
+
+/**
+ * Provider-aware cost estimator. Pass the provider id and modelId from
+ * getModelInfo(tier) to get the right pricing regardless of which backend is
+ * configured. Returns 0 for local providers (ollama) and unknown providers
+ * (with a warning so silent wrong numbers never reach the dashboard).
+ */
+export function estimateCostFromUsage(
+  provider: string,
+  modelId: string,
+  usage: AiSdkUsageLike,
+): number {
+  const input = usage.inputTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
+  const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
+
+  switch (provider) {
+    case "anthropic": {
+      const model: ClaudeModel = modelId.includes("haiku")
+        ? "haiku"
+        : modelId.includes("opus")
+        ? "opus"
+        : "sonnet";
+      return estimateClaudeCost({ model, inputTokens: input, outputTokens: output, cacheReadTokens: cacheRead, cacheCreationTokens: cacheWrite });
+    }
+    case "openai": {
+      if (modelId.startsWith("o3") || modelId.startsWith("o4")) {
+        return ((input / 1_000_000) * PRICING.openai_o3_input) + ((output / 1_000_000) * PRICING.openai_o3_output);
+      }
+      if (modelId.includes("mini")) {
+        return ((input / 1_000_000) * PRICING.openai_gpt4o_mini_input) + ((output / 1_000_000) * PRICING.openai_gpt4o_mini_output);
+      }
+      return ((input / 1_000_000) * PRICING.openai_gpt4o_input) + ((output / 1_000_000) * PRICING.openai_gpt4o_output);
+    }
+    case "google": {
+      if (modelId.includes("2.5-pro") || modelId.includes("2-5-pro")) {
+        return ((input / 1_000_000) * PRICING.google_gemini25_pro_input) + ((output / 1_000_000) * PRICING.google_gemini25_pro_output);
+      }
+      if (modelId.includes("2.5-flash") || modelId.includes("2-5-flash")) {
+        return ((input / 1_000_000) * PRICING.google_gemini25_flash_input) + ((output / 1_000_000) * PRICING.google_gemini25_flash_output);
+      }
+      return ((input / 1_000_000) * PRICING.google_gemini20_flash_input) + ((output / 1_000_000) * PRICING.google_gemini20_flash_output);
+    }
+    case "ollama":
+      return 0;
+    default:
+      console.warn(`[cost-tracker] estimateCostFromUsage: unknown provider "${provider}", returning 0`);
+      return 0;
+  }
 }
 
 /**

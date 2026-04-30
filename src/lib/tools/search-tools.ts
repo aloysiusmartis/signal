@@ -1,11 +1,12 @@
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject, tool } from "ai";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { ExaService, type SearchCategory } from "@/lib/services/exa-service";
 import { WebExtractionService } from "@/lib/services/web-extraction-service";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -649,7 +650,7 @@ export const discoverCompanies = tool({
       .join("\n\n");
 
     const { object: extracted, usage } = await generateObject({
-      model: anthropic("claude-haiku-4-5-20251001"),
+      model: getModel("fast"),
       schema: z.object({
         companies: z.array(
           z.object({
@@ -690,13 +691,14 @@ Scraped directory content:
 ${wrapUntrusted(combinedContent.slice(0, 15000))}`,
     });
 
+    const { provider, modelId } = getModelInfo("fast");
     trackUsage({
-      service: "claude",
+      service: providerToServiceName(provider),
       operation: "discoverCompanies-extract",
       tokens_input: usage.inputTokens ?? 0,
       tokens_output: usage.outputTokens ?? 0,
-      estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
-      metadata: { model: "claude-haiku-4-5" },
+      estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
+      metadata: { model: modelId },
     });
 
     // Step 4: Deduplicate and store via knowledge base

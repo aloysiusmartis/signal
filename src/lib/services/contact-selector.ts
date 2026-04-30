@@ -1,8 +1,9 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
+import { getModel, getModelInfo } from "@/lib/ai/gateway";
 import {
-  estimateClaudeCostFromUsage,
+  estimateCostFromUsage,
+  providerToServiceName,
   trackUsage,
 } from "@/lib/services/cost-tracker";
 import {
@@ -87,7 +88,7 @@ export async function selectContactsForSignal(
     .join("\n\n");
 
   const { object, usage } = await generateObject({
-    model: anthropic("claude-haiku-4-5-20251001"),
+    model: getModel("fast"),
     schema: verdictSchema,
     prompt: `You are picking the best contact(s) to email at a company after a buying-signal fired. You have the reason the signal fired (in the buyer's own words, via an upstream LLM) and a list of known contacts at the company.
 
@@ -118,13 +119,15 @@ Pick up to ${maxPicks} contact(s). Rules:
     }
   }
 
+  const { provider, modelId } = getModelInfo("fast");
   trackUsage({
-    service: "claude",
+    service: providerToServiceName(provider),
     operation: "select-contacts",
     tokens_input: usage.inputTokens ?? 0,
     tokens_output: usage.outputTokens ?? 0,
-    estimated_cost_usd: estimateClaudeCostFromUsage("haiku", usage),
+    estimated_cost_usd: estimateCostFromUsage(provider, modelId, usage),
     metadata: {
+      model: modelId,
       candidateCount: input.candidates.length,
       picksRequested: maxPicks,
       picksReturned: validPicks.length,
