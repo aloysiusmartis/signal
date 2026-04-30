@@ -1,0 +1,2 @@
+# CLAUDE.md
+@COORDINATION.md
