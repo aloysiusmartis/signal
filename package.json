@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.6.5",
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--max-http-header-size=32768' next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
