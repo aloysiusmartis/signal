@@ -10,6 +10,8 @@
  *      settings panel all pick it up automatically — no further wiring.
  */
 
+import { isAvailable } from "@/lib/ai/gateway";
+
 export type IntegrationCategory =
   | "auth" // sign-in / identity
   | "data" // database / storage
@@ -39,8 +41,16 @@ export interface Integration {
   /**
    * Env vars that must ALL be set for this integration to be configured.
    * If any one is empty, the integration is reported as "not configured".
+   * Ignored when `check` is provided.
    */
   envVars: string[];
+  /**
+   * Optional override for the "is this configured?" check. When present,
+   * replaces the envVars check entirely. Used for integrations whose
+   * required env var depends on runtime config (e.g. the AI gateway, which
+   * can be backed by Anthropic, OpenAI, Google, or Ollama).
+   */
+  check?: () => boolean;
   /**
    * Optional NEXT_PUBLIC_ env var for client-side detection (used by the
    * banner without a server round-trip). When omitted, the banner relies on
@@ -96,16 +106,18 @@ export const INTEGRATIONS: Integration[] = [
   },
   {
     id: "anthropic",
-    name: "Anthropic",
+    name: "AI provider",
     category: "ai",
     severity: "required",
     feature: "Chat, enrichment, email drafts",
     consequence:
       "Every chat request will fail with a 500. The agent and email composer are non-functional.",
     envVars: ["ANTHROPIC_API_KEY"],
+    check: () => isAvailable("standard"),
     signupUrl: "https://console.anthropic.com",
     keysUrl: "https://console.anthropic.com/settings/keys",
-    fixHint: "Add `ANTHROPIC_API_KEY=sk-ant-api...` to .env.local",
+    fixHint:
+      "Set at least one provider key: ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY",
   },
 
   // ─── OPTIONAL ────────────────────────────────────────────────────────────

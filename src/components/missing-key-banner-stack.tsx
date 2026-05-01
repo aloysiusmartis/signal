@@ -16,6 +16,7 @@ import { MissingKeyBanner } from "@/components/missing-key-banner";
 export function MissingKeyBannerStack() {
   const missingRequired = INTEGRATIONS.filter((integration) => {
     if (integration.severity !== "required") return false;
+    if (integration.check) return !integration.check();
     return integration.envVars.some((name) => !process.env[name]);
   });
 
@@ -24,9 +25,9 @@ export function MissingKeyBannerStack() {
   return (
     <>
       {missingRequired.map((integration) => {
-        const missingEnvVars = integration.envVars.filter(
-          (name) => !process.env[name],
-        );
+        const missingEnvVars = integration.check
+          ? []
+          : integration.envVars.filter((name) => !process.env[name]);
         return (
           <MissingKeyBanner
             key={integration.id}

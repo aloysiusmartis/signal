@@ -22,14 +22,19 @@ export function MissingKeyBanner({
       <strong>{integration.name} not configured.</strong>{" "}
       {integration.consequence}{" "}
       <span className="text-muted-foreground">
-        Missing:{" "}
-        {missingEnvVars.map((v, i) => (
-          <span key={v}>
-            {i > 0 && ", "}
-            <code className="rounded bg-amber-500/20 px-1">{v}</code>
-          </span>
-        ))}
-        . {integration.fixHint && <>{integration.fixHint}. </>}
+        {missingEnvVars.length > 0 && (
+          <>
+            Missing:{" "}
+            {missingEnvVars.map((v, i) => (
+              <span key={v}>
+                {i > 0 && ", "}
+                <code className="rounded bg-amber-500/20 px-1">{v}</code>
+              </span>
+            ))}
+            .{" "}
+          </>
+        )}
+        {integration.fixHint && <>{integration.fixHint}. </>}
       </span>
       {integration.signupUrl && (
         <a
