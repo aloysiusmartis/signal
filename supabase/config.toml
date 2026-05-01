@@ -304,7 +304,7 @@ enabled = false
 # and change the line below.
 [auth.third_party.clerk]
 enabled = true
-domain = "env(CLERK_FRONTEND_API_DOMAIN)"
+domain = "faithful-troll-4.clerk.accounts.dev"
 
 [edge_runtime]
 enabled = true

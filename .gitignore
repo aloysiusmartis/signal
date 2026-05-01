@@ -70,3 +70,4 @@ yarn.lock
 
 # graphify knowledge graph output
 /graphify-out/
+.gstack/
