@@ -65,4 +65,12 @@ Only contribute code that has no dependency on your personal extensions.
 
 ## Personal extensions in this fork
 
-_No active extensions yet._
+| File / path | Purpose | Conflict risk |
+|---|---|---|
+| `scripts/import-helyx-high.py` | One-shot CRM import (Helyx High sheet → Supabase) | Zero |
+| `supabase/migrations/20260430000000_pgrst_clerk_role.sql` | PostgREST pre-request hook (Clerk JWT → authenticated role) | Low |
+| `supabase/config.toml` — Clerk domain line | Hardcoded `faithful-troll-4.clerk.accounts.dev` | High — check on upstream sync |
+| `src/lib/ai/gateway.ts` + `src/lib/integrations.ts` | Multi-provider AI gateway + banner fix | Medium |
+| `.env.example` | AI gateway env var docs | Low |
+
+**PostgREST container note**: `PGRST_DB_PRE_REQUEST=public.pgrst_role_setter` is set as a container env var (not in compose). Must be re-applied after `supabase stop && supabase start`. See migration file for the docker run command.
