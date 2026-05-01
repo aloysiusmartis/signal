@@ -68,9 +68,12 @@ Only contribute code that has no dependency on your personal extensions.
 | File / path | Purpose | Conflict risk |
 |---|---|---|
 | `scripts/import-helyx-high.py` | One-shot CRM import (Helyx High sheet → Supabase) | Zero |
-| `supabase/migrations/20260430000000_pgrst_clerk_role.sql` | PostgREST pre-request hook (Clerk JWT → authenticated role) | Low |
+| `scripts/supabase-start.sh` | Wrapper for `supabase start` — re-applies PostgREST pre-request hook after restart | Zero |
+| `supabase/migrations/20260430000000_pgrst_clerk_role.sql` | PostgREST pre-request hook (Clerk JWT `sub IS NOT NULL` → authenticated role) | Low |
 | `supabase/config.toml` — Clerk domain line | Hardcoded `faithful-troll-4.clerk.accounts.dev` | High — check on upstream sync |
 | `src/lib/ai/gateway.ts` + `src/lib/integrations.ts` | Multi-provider AI gateway + banner fix | Medium |
 | `.env.example` | AI gateway env var docs | Low |
 
-**PostgREST container note**: `PGRST_DB_PRE_REQUEST=public.pgrst_role_setter` is set as a container env var (not in compose). Must be re-applied after `supabase stop && supabase start`. See migration file for the docker run command.
+**PostgREST container note**: `PGRST_DB_PRE_REQUEST=public.pgrst_role_setter` must be set as a container env var (PostgREST 14.10 ignores `ALTER ROLE ... SET` for this setting). Use `./scripts/supabase-start.sh` instead of `supabase start` directly — it calls `supabase start` then recreates the PostgREST container with the env var re-applied.
+
+**Why pre-request hook**: Clerk's Supabase third-party auth integration injects `role: "anon"` into every JWT. PostgREST reads the `role` claim and assigns the anon DB role, so `TO authenticated` RLS policies never fire. The pre-request function checks `sub IS NOT NULL` (only authenticated users have a `sub`) and upgrades to the `authenticated` DB role.
